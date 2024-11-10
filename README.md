@@ -15,7 +15,7 @@ Caddyfile
 # Global config
 {
    	on_demand_tls {
-		permission tls.permission.redis {
+		permission redis {
             host {$REDIS_HOST}
             port {$REDIS_PORT}
             username {$REDIS_USERNAME}

@@ -1,11 +1,23 @@
 {
-	on_demand {
-		permission tls.permission.redis {
-			host "123.123"
+	on_demand_tls {
+		permission redis {
+			host "localhost"
+			port "6379"
+			username "default"
+			password ""
+			prefix "identifier/"
 		}
 	}
 
-	:443 {
-		reverse_proxy https://google.nl
+	log {
+		level debug
 	}
+}
+
+:443 {
+	tls {
+		on_demand
+	}
+
+	reverse_proxy https://google.nl
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
+	"github.com/caddyserver/caddy/v2/modules/caddytls"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
@@ -17,12 +18,13 @@ const (
 )
 
 var (
-	_ caddy.Module          = (*PermissionByRedis)(nil)
-	_ caddy.Provisioner     = (*PermissionByRedis)(nil)
-	_ caddy.Validator       = (*PermissionByRedis)(nil)
-	_ caddyfile.Unmarshaler = (*PermissionByRedis)(nil)
-	_ caddy.CleanerUpper    = (*PermissionByRedis)(nil)
-	_ caddy.Provisioner     = (*PermissionByRedis)(nil)
+	_ caddy.Module                = (*PermissionByRedis)(nil)
+	_ caddy.Provisioner           = (*PermissionByRedis)(nil)
+	_ caddy.Validator             = (*PermissionByRedis)(nil)
+	_ caddyfile.Unmarshaler       = (*PermissionByRedis)(nil)
+	_ caddy.CleanerUpper          = (*PermissionByRedis)(nil)
+	_ caddytls.OnDemandPermission = (*PermissionByRedis)(nil)
+	_ caddy.Provisioner           = (*PermissionByRedis)(nil)
 )
 
 func init() {
@@ -31,12 +33,13 @@ func init() {
 
 type PermissionByRedis struct {
 	Client *redis.Client
-	logger *zap.SugaredLogger
+	logger *zap.Logger
 
 	Host     string `json:"host"`
 	Port     string `json:"port"`
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Prefix   string `json:"prefix"`
 }
 
 // CaddyModule returns the Caddy module information.
@@ -61,8 +64,10 @@ func (m *PermissionByRedis) Cleanup() error {
 // Provision implements the caddy.Provisioner interface.
 func (m *PermissionByRedis) Provision(ctx caddy.Context) error {
 	if m.logger == nil {
-		m.logger = ctx.Logger(m).Sugar()
+		m.logger = ctx.Logger(m)
 	}
+
+	m.logger.Info(fmt.Sprintf("Creating new Redis client %s:%s", m.Host, m.Port))
 
 	m.Client = redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%s", m.Host, m.Port),
@@ -70,6 +75,11 @@ func (m *PermissionByRedis) Provision(ctx caddy.Context) error {
 		Password: m.Password,
 		DB:       0,
 	})
+
+	err := m.Client.Ping(ctx).Err()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -115,6 +125,12 @@ func (m *PermissionByRedis) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 			} else {
 				m.Password = ""
 			}
+		case "prefix":
+			if value != "" {
+				m.Prefix = value
+			} else {
+				m.Prefix = ""
+			}
 		}
 	}
 
@@ -122,16 +138,16 @@ func (m *PermissionByRedis) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 }
 
 func (p PermissionByRedis) CertificateAllowed(ctx context.Context, name string) error {
-	redisKey := fmt.Sprintf("certificates/%s", name)
+	redisKey := fmt.Sprintf("%s%s", p.Prefix, name)
 	val, err := p.Client.Exists(ctx, redisKey).Result()
 
 	if err != nil {
-		return fmt.Errorf("%s: error looking up %s, %w", name, redisKey, err)
+		return fmt.Errorf("%s: %w (error looking up %s - %s)", name, caddytls.ErrPermissionDenied, redisKey, err)
 	}
 
 	if val == 1 {
 		return nil
 	}
 
-	return fmt.Errorf("%s: redis key %s not found", name, redisKey)
+	return fmt.Errorf("%s: %w (redis key %s not found)", name, caddytls.ErrPermissionDenied, redisKey)
 }
