@@ -1,8 +1,7 @@
 {
 	on_demand_tls {
 		permission redis {
-			host "localhost"
-			port "6379"
+			address "localhost:6379"
 			username "default"
 			password ""
 			prefix "identifier/"

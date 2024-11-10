@@ -12,8 +12,7 @@ import (
 )
 
 const (
-	DefaultRedisHost     = "127.0.0.1"
-	DefaultRedisPort     = "6379"
+	DefaultRedisAddress  = "127.0.0.1:6379"
 	DefaultRedisUsername = "default"
 )
 
@@ -35,8 +34,7 @@ type PermissionByRedis struct {
 	Client *redis.Client
 	logger *zap.Logger
 
-	Host     string `json:"host"`
-	Port     string `json:"port"`
+	Address  string `json:"address"`
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Prefix   string `json:"prefix"`
@@ -67,10 +65,10 @@ func (m *PermissionByRedis) Provision(ctx caddy.Context) error {
 		m.logger = ctx.Logger(m)
 	}
 
-	m.logger.Info(fmt.Sprintf("Creating new Redis client %s:%s", m.Host, m.Port))
+	m.logger.Info(fmt.Sprintf("Creating new Redis client %s", m.Address))
 
 	m.Client = redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%s", m.Host, m.Port),
+		Addr:     m.Address,
 		Username: m.Username,
 		Password: m.Password,
 		DB:       0,
@@ -101,17 +99,11 @@ func (m *PermissionByRedis) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 		}
 
 		switch key {
-		case "host":
+		case "address":
 			if value != "" {
-				m.Host = value
+				m.Address = value
 			} else {
-				m.Host = DefaultRedisHost
-			}
-		case "port":
-			if value != "" {
-				m.Port = value
-			} else {
-				m.Port = DefaultRedisPort
+				m.Address = DefaultRedisAddress
 			}
 		case "username":
 			if value != "" {
@@ -144,6 +136,8 @@ func (p PermissionByRedis) CertificateAllowed(ctx context.Context, name string) 
 	if err != nil {
 		return fmt.Errorf("%s: %w (error looking up %s - %s)", name, caddytls.ErrPermissionDenied, redisKey, err)
 	}
+
+	p.logger.Debug(fmt.Sprintf("Allowing certificate for %s: %d", name, val))
 
 	if val == 1 {
 		return nil

@@ -16,8 +16,7 @@ Caddyfile
 {
    	on_demand_tls {
 		permission redis {
-            host {$REDIS_HOST}
-            port {$REDIS_PORT}
+			address {$REDIS_HOST_PORT}
             username {$REDIS_USERNAME}
             password {$REDIS_PASSWORD}
         }
