@@ -1,0 +1,11 @@
+{
+	on_demand {
+		permission tls.permission.redis {
+			host "123.123"
+		}
+	}
+
+	:443 {
+		reverse_proxy https://google.nl
+	}
+}

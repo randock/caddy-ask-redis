@@ -6,7 +6,7 @@ The module will check if requested domain is a member of the Redis set defined b
 ## Installation
 ```
 xcaddy build \
-    --with github.com/CruGlobal/caddy-ask-redis
+    --with github.com/randock/caddy-ask-redis
 ```
 
 ## Usage
@@ -15,19 +15,12 @@ Caddyfile
 # Global config
 {
    	on_demand_tls {
-		ask http://localhost:1111
-	}
-}
-
-http://localhost:1111 {
-    route {
-        skip_log
-        ask_redis {
+		permission tls.permission.redis {
             host {$REDIS_HOST}
             port {$REDIS_PORT}
-            db {$REDIS_DB_INDEX}
-            key certificates:domain_allowlist
+            username {$REDIS_USERNAME}
+            password {$REDIS_PASSWORD}
         }
-    }
+	}
 }
 ```
