@@ -3,6 +3,7 @@ package caddy_ask_redis
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
@@ -31,8 +32,9 @@ func init() {
 }
 
 type PermissionByRedis struct {
-	Client *redis.Client
-	logger *zap.Logger
+	Client   *redis.Client
+	logger   *zap.Logger
+	WwwRegex *regexp.Regexp
 
 	Address  string `json:"address"`
 	Username string `json:"username"`
@@ -64,6 +66,8 @@ func (m *PermissionByRedis) Provision(ctx caddy.Context) error {
 	if m.logger == nil {
 		m.logger = ctx.Logger(m)
 	}
+
+	m.WwwRegex = regexp.MustCompile(`^www\.`)
 
 	m.logger.Info(fmt.Sprintf("Creating new Redis client %s", m.Address))
 
@@ -129,15 +133,20 @@ func (m *PermissionByRedis) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 	return nil
 }
 
-func (p PermissionByRedis) CertificateAllowed(ctx context.Context, name string) error {
-	redisKey := fmt.Sprintf("%s%s", p.Prefix, name)
-	val, err := p.Client.Exists(ctx, redisKey).Result()
+func (m PermissionByRedis) CertificateAllowed(ctx context.Context, name string) error {
+
+	// remove www.
+	name = m.WwwRegex.ReplaceAllString(name, "")
+
+	// compil key and check existance
+	redisKey := fmt.Sprintf("%s%s", m.Prefix, name)
+	val, err := m.Client.Exists(ctx, redisKey).Result()
 
 	if err != nil {
 		return fmt.Errorf("%s: %w (error looking up %s - %s)", name, caddytls.ErrPermissionDenied, redisKey, err)
 	}
 
-	p.logger.Debug(fmt.Sprintf("Allowing certificate for %s: %d", name, val))
+	m.logger.Debug(fmt.Sprintf("Allowing certificate for %s: %d", name, val))
 
 	if val == 1 {
 		return nil
